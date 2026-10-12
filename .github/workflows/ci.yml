@@ -1,0 +1,40 @@
+name: Tap CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: macos-latest
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_ANALYTICS: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check cask availability
+        id: cask
+        run: |
+          if [[ -f Casks/pdfm-mcp.rb ]]; then
+            printf 'available=true\n' >> "$GITHUB_OUTPUT"
+          else
+            printf 'Tap is ready; awaiting the first stable pdfm-mcp release.\n' >&2
+            printf 'available=false\n' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check style and audit
+        if: steps.cask.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          brew tap Parallels/tap "$GITHUB_WORKSPACE"
+          brew trust Parallels/tap
+          brew style Casks/pdfm-mcp.rb
+          brew audit --cask --strict --online Parallels/tap/pdfm-mcp
